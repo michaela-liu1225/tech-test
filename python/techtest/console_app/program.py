@@ -7,10 +7,10 @@ from techtest.risk_system import ScreenResultPrinter, SerialPricer, SerialTradeL
 def main() -> None:
     trade_loader = SerialTradeLoader()
 
-    all_trades = trade_loader.load_trades()
+    trade_streams = trade_loader.load_trades()
     results = ScalarResults()
     pricer = SerialPricer()
-    pricer.price(all_trades, results)
+    pricer.price(trade_streams, results)
 
     screen_printer = ScreenResultPrinter()
     screen_printer.print_results(results)
