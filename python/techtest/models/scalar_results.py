@@ -40,4 +40,10 @@ class ScalarResults(ResultReceiver):
         self._errors[trade_id] = error
 
     def __iter__(self) -> Iterator[ScalarResult]:
-        raise NotImplementedError()
+        """Yield one record per trade, with result entries before error-only entries."""
+        for trade_id in self._results:
+            yield self[trade_id]
+
+        for trade_id in self._errors:
+            if trade_id not in self._results:
+                yield self[trade_id]
