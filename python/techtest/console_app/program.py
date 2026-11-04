@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from techtest.models import ScalarResults
-from techtest.risk_system import ScreenResultPrinter, SerialPricer, SerialTradeLoader
+from techtest.risk_system import ParallelPricer, ScreenResultPrinter, SerialTradeLoader
 
 
 def main() -> None:
@@ -9,7 +9,7 @@ def main() -> None:
 
     trade_streams = trade_loader.load_trades()
     results = ScalarResults()
-    pricer = SerialPricer()
+    pricer = ParallelPricer()
     pricer.price(trade_streams, results)
 
     screen_printer = ScreenResultPrinter()
