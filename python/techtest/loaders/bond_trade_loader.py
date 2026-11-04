@@ -1,37 +1,48 @@
 from __future__ import annotations
 
+import csv
 from datetime import datetime
+from math import isfinite
 from typing import Iterable
 
-from techtest.models import BondTrade, BondTradeList, Trade
+from techtest.models import BondTrade, BondTradeList
 
 
 class BondTradeLoader:
     _SEPARATOR = ","
+    _HEADER = ["Type", "TradeDate", "Instrument", "Counterparty", "Notional", "Rate", "TradeId"]
 
     def __init__(self, data_file: str) -> None:
         self.data_file = data_file
 
-    def load_trades(self) -> Iterable[Trade]:
+    def load_trades(self) -> Iterable[BondTrade]:
+        """Read and validate the bond feed."""
         trade_list = BondTradeList()
-        self._load_trades_from_file(self.data_file, trade_list)
-
+        # utf-8-sig skips the byte order mark at the start of the file.
+        with open(self.data_file, encoding="utf-8-sig", newline="") as stream:
+            reader = csv.reader(stream, delimiter=self._SEPARATOR, strict=True)
+            try:
+                if next(reader, None) != self._HEADER:
+                    raise ValueError("Missing or unexpected bond column header")
+                for items in reader:
+                    if not items:
+                        continue
+                    trade_list.add(self._create_trade_from_fields(items))
+            except (csv.Error, ValueError) as exc:
+                raise ValueError(
+                    f"Invalid bond feed in {self.data_file} at line {max(reader.line_num, 1)}: {exc}"
+                ) from exc
         return trade_list
 
-    def _create_trade_from_line(self, line: str) -> BondTrade:
-        items = line.split(self._SEPARATOR)
-        trade = BondTrade(items[6])
-        trade.trade_date = datetime.fromisoformat(items[1])
-        trade.instrument = items[2]
-        trade.counterparty = items[3]
-        trade.notional = float(items[4])
-        trade.rate = float(items[5])
+    def _create_trade_from_fields(self, items: list[str]) -> BondTrade:
+        trade_type, trade_date, instrument, counterparty, notional, rate, trade_id = items
+        trade = BondTrade(trade_id, trade_type=trade_type)
+        trade.trade_date = datetime.fromisoformat(trade_date)
+        trade.instrument = instrument
+        trade.counterparty = counterparty
+        trade.notional = float(notional)
+        trade.rate = float(rate)
+        if not isfinite(trade.notional) or not isfinite(trade.rate):
+            raise ValueError("Notional and rate must be finite numbers")
 
         return trade
-
-    def _load_trades_from_file(self, filename: str, trade_list: BondTradeList) -> None:
-        # utf-8-sig skips the byte order mark at the start of the file
-        with open(filename, encoding="utf-8-sig") as stream:
-            next(stream, None)  # Skip the header line
-            for line in stream:
-                trade_list.add(self._create_trade_from_line(line.rstrip("\r\n")))
