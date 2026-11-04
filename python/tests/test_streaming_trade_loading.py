@@ -140,7 +140,7 @@ class StreamingTradeLoadingTests(unittest.TestCase):
             results = ScalarResults()
             with patch.object(loader, "_get_trade_loaders", return_value=sources), \
                     patch.object(pricer, "_load_pricers"), \
-                    patch.object(sources[0], "_create_trade_from_line", side_effect=track_parser(sources[0]._create_trade_from_line)), \
+                    patch.object(sources[0], "_create_trade_from_fields", side_effect=track_parser(sources[0]._create_trade_from_fields)), \
                     patch.object(sources[1], "_create_trade_from_fields", side_effect=track_parser(sources[1]._create_trade_from_fields)):
                 pricer.price(loader.load_trades(), results)
 

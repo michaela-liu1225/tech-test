@@ -15,10 +15,11 @@ class FxTradeLoaderEdgeCaseTests(unittest.TestCase):
     )
     _TRADE = "FxSpot¬2012-10-08¬EUR¬USD¬145000000¬0.97562¬2012-10-11¬CSI,AG¬SPOT001"
 
-    def _load_feed(self, records: str, encoding: str = "utf-8"):
+    def _load_feed(self, records: str, encoding: str = "utf-8", header: str = _HEADER):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "FxTrades.dat"
-            path.write_text(self._HEADER + records, encoding=encoding)
+            with path.open("w", encoding=encoding, newline="") as stream:
+                stream.write(header + records)
             return list(FxTradeLoader(str(path)).load_trades())
 
     def test_all_trade_ids_are_preserved(self):
@@ -73,6 +74,59 @@ class FxTradeLoaderEdgeCaseTests(unittest.TestCase):
             with self.subTest(trade_id=trade_id):
                 with self.assertRaises(ValueError):
                     FxTrade(trade_id, FxTrade.FX_SPOT_TRADE_TYPE)
+
+    def test_missing_or_changed_headers_are_rejected(self):
+        for header in (
+            "",
+            "FxTrades¬2012-10-15\n",
+            self._HEADER.replace("FxTrades", "OtherFeed"),
+            self._HEADER.replace("2012-10-15", "not-a-date"),
+            self._HEADER.replace("Ccy1¬Ccy2", "Ccy2¬Ccy1"),
+        ):
+            with self.subTest(header=header), self.assertRaisesRegex(ValueError, r"FxTrades\.dat at line"):
+                self._load_feed(self._TRADE + "\nEND¬5\n", header=header)
+
+    def test_missing_end_marker_is_reported_after_prior_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "FxTrades.dat"
+            path.write_text(self._HEADER + self._TRADE + "\n", encoding="utf-8")
+            trades = FxTradeLoader(str(path)).load_trades()
+            self.assertEqual(next(trades).trade_id, "SPOT001")
+            with self.assertRaisesRegex(ValueError, r"FxTrades\.dat at line 3: Missing END marker"):
+                next(trades)
+
+    def test_empty_feed_requires_headers_and_an_end_marker(self):
+        self.assertEqual(self._load_feed("END¬1\n"), [])
+        with self.assertRaisesRegex(ValueError, "Missing END marker"):
+            self._load_feed("")
+        with self.assertRaisesRegex(ValueError, "feed header"):
+            self._load_feed("", header="")
+
+    def test_unterminated_quotes_are_rejected_with_context(self):
+        row = self._TRADE.replace("CSI,AG", '"CSI,AG')
+        with self.assertRaisesRegex(ValueError, r"FxTrades\.dat at line 4"):
+            self._load_feed(row + "\nEND¬5\n")
+
+    def test_quoted_fields_support_newlines_and_escaped_quotes(self):
+        row = self._TRADE.replace("CSI,AG", '"CSI\r\n""AG"""')
+        trade = self._load_feed(row + "\r\nEND¬5\r\n")[0]
+        self.assertEqual(trade.counterparty, 'CSI\r\n"AG"')
+        self.assertEqual(trade.trade_id, "SPOT001")
+
+    def test_non_finite_numbers_are_rejected(self):
+        for field in (4, 5):
+            for value in ("NaN", "inf", "-inf", "1e999"):
+                with self.subTest(field=field, value=value):
+                    fields = self._TRADE.split("¬")
+                    fields[field] = value
+                    with self.assertRaisesRegex(ValueError, "finite numbers"):
+                        self._load_feed("¬".join(fields) + "\nEND¬5\n")
+
+    def test_zero_and_negative_values_are_preserved(self):
+        row = self._TRADE.replace("¬145000000¬0.97562¬", "¬-145000000¬0¬")
+        trade = self._load_feed(row + "\nEND¬5\n")[0]
+        self.assertEqual(trade.notional, -145000000.0)
+        self.assertEqual(trade.rate, 0.0)
 
 
 if __name__ == "__main__":
