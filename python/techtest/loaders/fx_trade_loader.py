@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import csv
 from datetime import datetime
-from typing import Iterable
+from typing import Iterator
 
-from techtest.models import FxTrade, Trade, TradeList
+from techtest.models import FxTrade
 
 
 class FxTradeLoader:
@@ -13,8 +13,8 @@ class FxTradeLoader:
     def __init__(self, data_file: str) -> None:
         self.data_file = data_file
 
-    def load_trades(self) -> Iterable[Trade]:
-        trade_list = TradeList()
+    def load_trades(self) -> Iterator[FxTrade]:
+        """Yield one trade at a time while the feed is open."""
         with open(self.data_file, encoding="utf-8-sig", newline="") as stream:
             reader = csv.reader(stream, delimiter=self._SEPARATOR)
             next(reader, None)  # Skip the feed name and date.
@@ -32,9 +32,7 @@ class FxTradeLoader:
                     raise ValueError(
                         f"Invalid FX trade in {self.data_file} at line {reader.line_num}: {exc}"
                     ) from exc
-                trade_list.add(trade)
-
-        return trade_list
+                yield trade
 
     def _create_trade_from_fields(self, items: list[str]) -> FxTrade:
         trade_type, trade_date, ccy1, ccy2, amount, rate, value_date, counterparty, trade_id = items
