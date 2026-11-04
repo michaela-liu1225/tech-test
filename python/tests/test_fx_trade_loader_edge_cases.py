@@ -86,9 +86,14 @@ class FxTradeLoaderEdgeCaseTests(unittest.TestCase):
             with self.subTest(header=header), self.assertRaisesRegex(ValueError, r"FxTrades\.dat at line"):
                 self._load_feed(self._TRADE + "\nEND¬5\n", header=header)
 
-    def test_missing_end_marker_is_rejected(self):
-        with self.assertRaisesRegex(ValueError, r"FxTrades\.dat at line 3: Missing END marker"):
-            self._load_feed(self._TRADE + "\n")
+    def test_missing_end_marker_is_reported_after_prior_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "FxTrades.dat"
+            path.write_text(self._HEADER + self._TRADE + "\n", encoding="utf-8")
+            trades = FxTradeLoader(str(path)).load_trades()
+            self.assertEqual(next(trades).trade_id, "SPOT001")
+            with self.assertRaisesRegex(ValueError, r"FxTrades\.dat at line 3: Missing END marker"):
+                next(trades)
 
     def test_empty_feed_requires_headers_and_an_end_marker(self):
         self.assertEqual(self._load_feed("END¬1\n"), [])

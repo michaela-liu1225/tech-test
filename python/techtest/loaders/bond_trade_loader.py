@@ -3,9 +3,9 @@ from __future__ import annotations
 import csv
 from datetime import datetime
 from math import isfinite
-from typing import Iterable
+from typing import Iterator
 
-from techtest.models import BondTrade, BondTradeList
+from techtest.models import BondTrade
 
 
 class BondTradeLoader:
@@ -15,9 +15,8 @@ class BondTradeLoader:
     def __init__(self, data_file: str) -> None:
         self.data_file = data_file
 
-    def load_trades(self) -> Iterable[BondTrade]:
-        """Read and validate the bond feed."""
-        trade_list = BondTradeList()
+    def load_trades(self) -> Iterator[BondTrade]:
+        """Yield one trade at a time while the feed is open."""
         # utf-8-sig skips the byte order mark at the start of the file.
         with open(self.data_file, encoding="utf-8-sig", newline="") as stream:
             reader = csv.reader(stream, delimiter=self._SEPARATOR, strict=True)
@@ -27,12 +26,11 @@ class BondTradeLoader:
                 for items in reader:
                     if not items:
                         continue
-                    trade_list.add(self._create_trade_from_fields(items))
+                    yield self._create_trade_from_fields(items)
             except (csv.Error, ValueError) as exc:
                 raise ValueError(
                     f"Invalid bond feed in {self.data_file} at line {max(reader.line_num, 1)}: {exc}"
                 ) from exc
-        return trade_list
 
     def _create_trade_from_fields(self, items: list[str]) -> BondTrade:
         trade_type, trade_date, instrument, counterparty, notional, rate, trade_id = items

@@ -3,9 +3,9 @@ from __future__ import annotations
 import csv
 from datetime import datetime
 from math import isfinite
-from typing import Iterable
+from typing import Iterator
 
-from techtest.models import FxTrade, TradeList
+from techtest.models import FxTrade
 
 
 class FxTradeLoader:
@@ -15,9 +15,8 @@ class FxTradeLoader:
     def __init__(self, data_file: str) -> None:
         self.data_file = data_file
 
-    def load_trades(self) -> Iterable[FxTrade]:
-        """Read and validate the FX feed."""
-        trade_list = TradeList()
+    def load_trades(self) -> Iterator[FxTrade]:
+        """Yield one trade at a time while the feed is open."""
         with open(self.data_file, encoding="utf-8-sig", newline="") as stream:
             reader = csv.reader(stream, delimiter=self._SEPARATOR, strict=True)
             try:
@@ -33,8 +32,8 @@ class FxTradeLoader:
                     if items[0] == "END":
                         # The trailer number is undocumented; the supplied feed has
                         # four trades but ends with END¬5. Only use the end marker.
-                        return trade_list
-                    trade_list.add(self._create_trade_from_fields(items))
+                        return
+                    yield self._create_trade_from_fields(items)
                 raise ValueError("Missing END marker; the FX feed may be incomplete")
             except (csv.Error, ValueError) as exc:
                 raise ValueError(
